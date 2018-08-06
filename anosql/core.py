@@ -5,6 +5,9 @@ anosql main module
 import os
 import re
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SQLLoadException(Exception):
     pass
@@ -85,27 +88,35 @@ def parse_sql_entry(db_type, e):
     if db_type == 'postgres':
         query = re.sub(r'[^:]:([a-zA-Z_-]+)', r'%(\1)s', query)
 
+    logger.debug(f"Query to be executed: {query}")
+
     # dynamically create the "name" function
     def fn(conn, *args, **kwargs):
         results = None
-        cur = conn.cursor()
-        cur.execute(query, kwargs if len(kwargs) > 0 else args)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, kwargs if len(kwargs) > 0 else args)
 
-        if sql_type == SELECT:
-            if use_col_description:
-                cols = [col[0] for col in cur.description]
-                results = [dict(zip(cols, row)) for row in cur.fetchall()]
-            else:
-                results = cur.fetchall()
+                if sql_type == SELECT:
+                    if use_col_description:
+                        cols = [col[0] for col in cur.description]
+                        results = [dict(zip(cols, row)) for row in cur.fetchall()]
+                    else:
+                        results = cur.fetchall()
 
-        elif sql_type == AUTO_GEN:
-            if db_type == 'postgres':
-                pool = cur.fetchone()
-                results = pool[0] if pool else None
-            elif db_type == 'sqlite':
-                results = cur.lastrowid
+                elif sql_type == AUTO_GEN:
+                    if db_type == 'postgres':
+                        pool = cur.fetchone()
+                        results = pool[0] if pool else None
+                    elif db_type == 'sqlite':
+                        results = cur.lastrowid
+                else:  ## INSERT_UPDATE_DELETE
+                    conn.commit()
 
-        cur.close()
+        except Exception as e:
+            conn.rollback()
+            raise e
+
         return results
 
     fn.__doc__ = doc
