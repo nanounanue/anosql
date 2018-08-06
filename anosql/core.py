@@ -86,9 +86,9 @@ def parse_sql_entry(db_type, e):
         query += ' RETURNING id'
 
     if db_type == 'postgres':
-        query = re.sub(r'[^:]:([a-zA-Z_-]+)', r'%(\1)s', query)
+        query = re.sub(r':([a-zA-Z_-]+)', r'%(\1)s', query)
 
-    logger.debug(f"Query to be executed: {query}")
+    logger.debug(f"function {name} will execute the query: \n\n {query}")
 
     # dynamically create the "name" function
     def fn(conn, *args, **kwargs):
